@@ -1,0 +1,330 @@
+package cn.eoe.mifareultralight;
+
+import java.io.IOException;
+import java.nio.charset.Charset;
+import java.util.Arrays;
+import java.util.Timer;
+import java.util.TimerTask;
+
+
+import android.app.Activity;
+import android.app.PendingIntent;
+import android.content.Intent;
+import android.nfc.NfcAdapter;
+import android.nfc.Tag;
+import android.nfc.tech.MifareClassic;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
+import android.widget.CheckBox;
+import android.widget.Toast;
+
+public class MifareultralightMainActivity extends Activity {
+
+//	private Timer timer;  
+//    private TimerTask task;  
+	private CheckBox mWriteData;
+	private NfcAdapter mNfcAdapter;
+	private PendingIntent mPendingIntent;
+	private static Tag tag=null;
+	private MifareClassic mc;
+	Handler handler = new Handler(){
+		public void handleMessage(android.os.Message msg) {
+			
+			handler.removeCallbacksAndMessages(null);
+			readCarCode(tag, 16,"a9769137aba5");
+			handler.sendMessageDelayed(Message.obtain(handler),5000);
+		};
+	};
+	
+	@Override
+	public void onCreate(Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+
+		setContentView(R.layout.activity_mifareultralight);
+		mWriteData = (CheckBox) findViewById(R.id.checkbox_write);
+		mNfcAdapter = NfcAdapter.getDefaultAdapter(this);
+		mPendingIntent = PendingIntent.getActivity(this, 0, new Intent(this, getClass()), 0);
+//		tag = getIntent().getParcelableExtra(NfcAdapter.EXTRA_TAG);
+		if (mNfcAdapter == null) {  
+            Toast.makeText(this, "设备不支持NFC！", Toast.LENGTH_SHORT).show();  
+            finish();  
+            return;  
+        }  
+        if (!mNfcAdapter.isEnabled()) {  
+            Toast.makeText(this, "请在系统设置中先启用NFC功能！", Toast.LENGTH_SHORT).show();  
+            return;  
+        }  
+//        if(timer != null){
+//			timer.schedule(task, 5000, 5000); //启动定时器5分钟一次
+//		}else{
+//			timer = new Timer();
+//			task = new TimerTask() {  
+//				@Override  
+//				public void run() {  
+//						if(tag == null){
+//							System.out.println("我是空的,没有卡");
+//						}else{
+//							System.out.println("我不是空的,有卡");
+//						}
+//					}
+////					SocketUtil.sendHeart(getApplicationContext(), ou);
+//			};   
+//			timer.schedule(task, 5000, 5000);
+//		}
+	}
+
+	@Override
+	public void onResume() {
+		super.onResume();
+		if (mNfcAdapter != null) {
+			mNfcAdapter.enableForegroundDispatch(this, mPendingIntent, null, null);
+		}
+	}
+
+	@Override
+	public void onPause() {
+		super.onPause();
+		if (mNfcAdapter != null) {
+			mNfcAdapter.disableForegroundDispatch(this);
+		}
+		handler.removeCallbacksAndMessages(null);
+//		if (task != null) {
+//			task.cancel();
+//			task = null;
+//		}
+//
+//		if (timer != null) {
+//			timer.purge();
+//			timer.cancel();
+//			timer = null;
+//		}
+	}
+
+	@Override
+	public void onNewIntent(Intent intent) {
+		tag = intent.getParcelableExtra(NfcAdapter.EXTRA_TAG);
+		if(tag==null)return;
+		System.out.println("-----------"+tag.toString());
+		// 获取nfc标签支持的数据格式
+		String[] techList = tag.getTechList();
+
+		boolean haveMifareUltralight = false;
+		for (String tech : techList) {
+			System.out.println("数据格式" + tech);
+			if (tech.indexOf("MifareClassic") >= 0) {
+				haveMifareUltralight = true;
+				break;
+			}
+		}
+        
+		if (!haveMifareUltralight) {
+			Toast.makeText(this, "没有MifareClassic数据格式ʽ", Toast.LENGTH_LONG).show();
+			return;
+		}
+		
+		// 获取卡id  
+        byte[] id = tag.getId();  
+        System.out.println(id.toString()); 
+//		if (mWriteData.isChecked()) {
+//			writeTag(tag);
+//		}
+//	else {
+			String person_name = readCarCode(tag,"16", "a9769137aba5");
+			String person_phone = selectCardMsg("18", "a9769137aba5");
+			final String type = selectCardMsg("32", "6be6661b3f41");
+			final String code = selectCardMsg("33", "6be6661b3f41");
+			readCarCode(tag,16,"a9769137aba5");
+			
+			//handler.sendMessageDelayed(Message.obtain(handler),5000);
+//			System.out.println("读取到的数据是name"+toStringHex(name.substring(0,name.length() - 2).replaceAll(" ", "")));
+//			System.out.println("读取到的数据是phone"+toStringHex(phone.substring(0,phone.length() - 2).replaceAll(" ", "")));
+//			System.out.println("读取到的数据是type"+toStringHex(type.substring(0,type.length() - 2).replaceAll(" ", "")));
+//			System.out.println("读取到的数据是code"+toStringHex(code.substring(0,code.length() - 2).replaceAll(" ", "")));
+			
+//		}
+
+	}
+
+	public void writeTag(Tag tag) {// 08-30 10:18:08.121: I/System.out(5258):
+									// 数据格式android.nfc.tech.MifareClassic
+		MifareClassic mc = MifareClassic.get(tag);
+		// MifareUltralight ultralight = MifareUltralight.get(tag);
+		try {
+			mc.connect();
+			 boolean auth = false;
+			   short sectorAddress = 1;
+			   auth = mc.authenticateSectorWithKeyA(sectorAddress,
+			     MifareClassic.KEY_DEFAULT);
+			   if(auth){
+				   mc.writeBlock(4, "中国人民共和国起".getBytes(Charset.forName("GB2312")));
+				   // mc.writeBlock(5, "美国人民共和国起".getBytes(Charset.forName("GB2312")));
+				   // mc.writeBlock(6, "英国人民共和国起".getBytes(Charset.forName("GB2312")));
+				   // mc.writeBlock(7, "法国人民共和国起".getBytes(Charset.forName("GB2312")));
+				   
+				   Toast.makeText(this, "成功写入MifareClassic格式数据!", Toast.LENGTH_LONG).show();
+			   }else{
+				   Toast.makeText(getApplicationContext(), "验证失败 ", 1).show();
+			   }
+		} catch (Exception e) {
+			e.printStackTrace();
+			System.out.println("我写的时候异常了" + e.toString());
+		} finally {
+			try {
+				mc.close();
+			} catch (Exception e) {
+				e.printStackTrace();
+				System.out.println("我关闭的时候异常了" + e.toString());
+			}
+		}
+	}
+
+	
+	public String readTag(Tag tag) {
+		MifareClassic mc = MifareClassic.get(tag);
+		if (mc != null) {
+			Toast.makeText(this, "检查到卡片，读卡中...", Toast.LENGTH_SHORT).show();
+			try {
+				mc.connect();
+				boolean auth = false;
+				auth = mc.authenticateSectorWithKeyA(1, MifareClassic.KEY_DEFAULT);// 验证密码
+				if (auth) {
+					byte[] data = mc.readBlock(4);
+					return new String(data, Charset.forName("GB2312"));// 读取M1卡的第4块即1扇区第0块
+				} else {
+					Toast.makeText(this, "认证失败", Toast.LENGTH_SHORT).show();
+				}
+
+			} catch (Exception e) {
+				if (BuildConfig.DEBUG) {
+					e.printStackTrace();
+				}
+			} finally {
+				try {
+					mc.close();
+				} catch (Exception e) {
+					e.printStackTrace();
+					System.out.println("我关闭的时候异常了" + e.toString());
+				}
+			}
+		}
+		return null;
+	}
+
+	
+	public String readCarCode(Tag tag,int block, String key) { 
+
+		System.out.println("==========="+tag.toString());
+		MifareClassic mc = MifareClassic.get(tag);
+        String string = "";  
+        boolean isTrue;  
+        try {  
+        	mc.connect();  
+            int keyblock = block / 4;  
+            if ("".equals(key))  
+                isTrue = mc.authenticateSectorWithKeyA(keyblock,  
+                        MifareClassic.KEY_DEFAULT);  
+            else {  
+                byte[] bytes = hexStringToBytes(key);  
+                byte[] keyBytes = Arrays.copyOf(bytes, 6);  
+                isTrue = mc.authenticateSectorWithKeyA(keyblock, keyBytes);  
+            }  
+            if (isTrue) {  
+                byte[] k = mc.readBlock(block);  
+                string = new String(k, "utf-8");  
+            } else {  
+                string = "秘钥错误";  
+            }  
+        } catch (Exception e) {  
+            e.printStackTrace();  
+            string = "没有卡";  
+        } finally {  
+            try {  
+                mc.close();
+            } catch (Exception e) {  
+                // TODO Auto-generated catch block  
+                e.printStackTrace();  
+            }  
+        }  
+        System.out.println("读取到的数据是"+string);
+        return string;  
+    }  
+	
+	public String wirteCarCode(Tag tag,String carCode, int block, String key) {  
+		MifareClassic mc = MifareClassic.get(tag);
+        boolean isTrue;  
+        String string = "";  
+        try {  
+            if (block % 4 == 3) {  
+                string = "此块是秘钥块！";  
+                return string;  
+            }  
+            mc.connect();  
+            int keyblock = block / 4;  
+            if ("".equals(key))  
+                isTrue = mc.authenticateSectorWithKeyA(keyblock,  
+                        MifareClassic.KEY_DEFAULT);  
+            else {  
+                byte[] bytes = hexStringToBytes(key);  
+                byte[] keyBytes = Arrays.copyOf(bytes, 6);  
+                isTrue = mc.authenticateSectorWithKeyA(keyblock, keyBytes);  
+            }  
+            byte[] bytes = carCode.trim().getBytes("UTF-8");  
+            byte[] a = Arrays.copyOf(bytes, 16);  
+            mc.writeBlock(block, a);  
+            if (isTrue) {  
+            } else {  
+                string = "秘钥错误！";  
+            }  
+        } catch (Exception e) {  
+            // TODO Auto-generated catch block  
+            e.printStackTrace();  
+            string = "写入失败！";  
+        } finally {  
+            try {  
+                mc.close();  
+            } catch (Exception e) {  
+                // TODO Auto-generated catch block  
+                e.printStackTrace();  
+            }  
+        }  
+        return string;  
+    }  
+	
+	public byte[] hexStringToBytes(String hexString) {  
+	    if (hexString == null || hexString.equals("")) {  
+	        return null;  
+	    }  
+	    hexString = hexString.toUpperCase();  
+	    int length = hexString.length() / 2;  
+	    char[] hexChars = hexString.toCharArray();  
+	    byte[] d = new byte[length];  
+	    for (int i = 0; i < length; i++) {  
+	        int pos = i * 2;  
+	        d[i] = (byte) (charToByte(hexChars[pos]) << 4 | charToByte(hexChars[pos + 1]));  
+	    }  
+	    return d;  
+	}  
+	private byte charToByte(char c) {  
+	    return (byte) "0123456789ABCDEF".indexOf(c);  
+	}  
+	
+	// 16进制ascii转成gbk编码的汉字
+		public static String toStringHex(String s) {
+			byte[] baKeyword = new byte[s.length() / 2];
+			for (int i = 0; i < baKeyword.length; i++) {
+				try {
+					baKeyword[i] = (byte) (0xff & Integer.parseInt(
+							s.substring(i * 2, i * 2 + 2), 16));
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+			try {
+				s = new String(baKeyword, "GBK");// UTF-16le:Not
+			} catch (Exception e1) {
+				e1.printStackTrace();
+			}
+			return s;
+		}
+}

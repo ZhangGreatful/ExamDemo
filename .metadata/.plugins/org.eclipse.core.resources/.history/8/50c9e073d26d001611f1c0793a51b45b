@@ -1,0 +1,386 @@
+package com.tianyan.tick.ossservice;
+
+import java.io.File;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
+
+import android.content.Context;
+import android.os.Looper;
+import android.util.Log;
+import android.widget.Toast;
+
+import com.alibaba.sdk.android.oss.ClientConfiguration;
+import com.alibaba.sdk.android.oss.ClientException;
+import com.alibaba.sdk.android.oss.OSS;
+import com.alibaba.sdk.android.oss.OSSClient;
+import com.alibaba.sdk.android.oss.ServiceException;
+import com.alibaba.sdk.android.oss.common.auth.OSSCredentialProvider;
+import com.alibaba.sdk.android.oss.common.auth.OSSPlainTextAKSKCredentialProvider;
+import com.alibaba.sdk.android.oss.model.GetObjectRequest;
+import com.alibaba.sdk.android.oss.model.GetObjectResult;
+import com.alibaba.sdk.android.oss.model.PutObjectRequest;
+import com.alibaba.sdk.android.oss.model.PutObjectResult;
+import com.tianyan.tick.utils.FileUtil;
+import com.tianyan.tick.utils.ToastUtil;
+/**
+ * OSS实体类
+ * @author Administrator
+ *
+ */
+public class OSSUtils{
+    private static final String endpoint = "http://oss-cn-hangzhou.aliyuncs.com";
+    private static final String callbackAddress = "http://oss-demo.aliyuncs.com:23450";
+    private String bucket = "chrono";
+    private String stsServer = "http://oss-demo.aliyuncs.com/app-server/sts.php";
+
+    
+    private static final String accessKeyId = "ChnSf3AbJfHg9TxN";
+    private static final String accessKeySecret = "hbwj6Amx4tZkuvt4cXcI5tRh8UlBI0";
+
+    //负责所有的界面更新
+    private UIDispatcher UIDispatcher;
+
+    //OSS的上传下载
+    private OssService ossService;
+
+    private int pauseTaskStatus;
+    private PauseableUploadTask task;
+    private String pauseObject;
+    private String pauseLocalFile;
+    private static final int TASK_NONE = 1;
+    private static final int TASK_PAUSE = 2;
+    private static final int TASK_RUNNING = 3;
+
+    private static final int RESULT_UPLOAD_IMAGE = 1;
+    private static final int RESULT_PAUSEABLEUPLOAD_IMAGE = 2;
+    private String obName;
+    private String picPath;
+    private Context context;
+    
+    private List<File> mFileList;
+    
+    public OSSUtils(Context context) {
+		super();
+		this.context = context;
+	}
+
+	public void initOSS() {
+
+    	//如果希望直接使用accessKey来访问的时候，可以直接使用OSSPlainTextAKSKCredentialProvider来鉴权。
+        OSSCredentialProvider credentialProvider = new OSSPlainTextAKSKCredentialProvider(accessKeyId, accessKeySecret);
+
+        //使用自己的获取STSToken的类
+//        OSSCredentialProvider credentialProvider = new STSGetter(stsServer);
+
+        ClientConfiguration conf = new ClientConfiguration();
+        conf.setConnectionTimeout(15 * 1000); // 连接超时，默认15秒
+        conf.setSocketTimeout(15 * 1000); // socket超时，默认15秒
+        conf.setMaxConcurrentRequest(5); // 最大并发请求书，默认5个
+        conf.setMaxErrorRetry(2); // 失败后最大重试次数，默认2次
+
+        OSS oss = new OSSClient(context, endpoint, credentialProvider, conf);
+
+        ossService = new OssService(oss, bucket);
+        
+        //设置上传的callback地址，目前暂时只支持putObject的回调
+//        ossService.setCallbackAddress(callbackAddress);
+        
+        UIDispatcher = new UIDispatcher(Looper.getMainLooper());
+        
+    }
+
+    /**
+     * 普通上传
+     * @param picturePath
+     * @param objectName
+     * @return
+     */
+    public String upload(String picturePath,String objectName){
+    	obName = objectName;
+    	picPath=picturePath;
+    	Log.d("图片路径-------------", picPath);
+    	System.out.println("图片路径-------------"+picturePath);
+//    	Uri selectedImage = data.getData();
+//        String[] filePathColumn = { MediaStore.Images.Media.DATA };
+//
+//        Cursor cursor = getContentResolver().query(selectedImage,
+//                filePathColumn, null, null, null);
+//        cursor.moveToFirst();
+//
+//        int columnIndex = cursor.getColumnIndex(filePathColumn[0]);
+            ossService.asyncPutImage(objectName, picturePath, getPutCallback(), new ProgressCallbackFactory<PutObjectRequest>().get());
+          
+    	return null;
+    }
+    
+    /**
+     * 下载
+     * @param picturePath
+     * @param objectName
+     * @return
+     */
+    public String download(String objectName){
+//    	Uri selectedImage = data.getData();
+//        String[] filePathColumn = { MediaStore.Images.Media.DATA };
+//
+//        Cursor cursor = getContentResolver().query(selectedImage,
+//                filePathColumn, null, null, null);
+//        cursor.moveToFirst();
+//
+//        int columnIndex = cursor.getColumnIndex(filePathColumn[0]);
+    	 ossService.asyncGetImage(objectName, getGetCallback());
+    	return null;
+    }
+    
+    /**
+     *  断点上传
+     * @param picturePath
+     * @param objectName
+     * @return
+     */
+    public String multipart_upload(String picturePath,String objectName){
+    	  //为了简单化，这里只会同时运行一个断点上传的任务
+
+          task = ossService.asyncMultiPartUpload(objectName, picturePath, getMultiPartCallback().addCallback(new Runnable() {
+              @Override
+              public void run() {
+                  pauseTaskStatus = TASK_NONE;
+                  task = null;
+              }
+          }), new ProgressCallbackFactory<PauseableUploadRequest>().get());
+          pauseTaskStatus = TASK_RUNNING;
+          pauseObject = objectName;
+          pauseLocalFile = picturePath;
+
+    	return null;
+    }
+    
+    /**
+     * 上传暂停
+     */
+    public void  multipart_pause(){
+    	if (pauseTaskStatus == TASK_RUNNING) {
+            Log.d("MultiPartTask", "Pasue");
+            task.pause();
+            task = null;
+            pauseTaskStatus = TASK_PAUSE;
+        }
+        else {
+        }
+    }
+    /**
+     * 上传继续
+     */
+    public void multipart_resume(){
+    	 if (pauseTaskStatus == TASK_PAUSE) {
+             Log.d("MultiPartTask", "Resume");
+             task = ossService.asyncMultiPartUpload(pauseObject, pauseLocalFile, getMultiPartCallback().addCallback(new Runnable() {
+                 @Override
+                 public void run() {
+                     pauseTaskStatus = TASK_NONE;
+                     task = null;
+                 }
+             }), new ProgressCallbackFactory<PauseableUploadRequest>().get());
+             pauseTaskStatus = TASK_RUNNING;
+         }
+         else {
+             Log.d("MultiPartTask", "ResumeFail");
+         }
+    }
+    
+
+    private class ProgressCallbackFactory<T> {
+        public UIProgressCallback<T> get() {
+            return new UIProgressCallback<T>(UIDispatcher) {
+                @Override
+                public void onProgress(T request, long currentSize, long totalSize) {
+                    final int progress = (int) (100 * currentSize / totalSize);
+                    addCallback(new Runnable() {
+                        @Override
+                        public void run() {
+                            System.out.println("进度"+progress);
+                        }
+                    });
+                    super.onProgress(request, currentSize, totalSize);
+                }
+            };
+        }
+    }
+
+    public UICallback<GetObjectRequest, GetObjectResult> getGetCallback() {
+        return new UICallback<GetObjectRequest, GetObjectResult>(UIDispatcher) {
+            @Override
+            public void onSuccess(GetObjectRequest request, GetObjectResult result) {
+                // 请求成功
+                InputStream inputStream = result.getObjectContent();
+                //重载InputStream来获取读取进度信息
+                ProgressInputStream progressStream = new ProgressInputStream(inputStream,
+                        new ProgressCallbackFactory<GetObjectRequest>().get(),
+                        result.getContentLength());
+                //需要根据对应的View大小来自适应缩放
+				final String object = request.getObjectKey();
+				final String requestid = result.getRequestId();
+				addCallback(new Runnable() {
+				    @Override
+				    public void run() {
+				        ToastUtil.show(context,"下载成功");
+				    }
+				}, null);
+				super.onSuccess(request, result);
+            }
+
+            @Override
+            public void onFailure(GetObjectRequest request, ClientException clientExcepion, ServiceException serviceException) {
+                String info = "";
+                if (clientExcepion != null) {
+                    // 本地异常如网络异常等
+                    clientExcepion.printStackTrace();
+                    info = clientExcepion.toString();
+                }
+                if (serviceException != null) {
+                    // 服务异常
+                    info = serviceException.toString();
+                }
+                final String outputinfo = new String(info);
+                addCallback(null, new Runnable() {
+                    @Override
+                    public void run() {
+                    	ToastUtil.show(context, "下载失败");
+                    }
+                });
+                super.onFailure(request, clientExcepion, serviceException);
+            }
+        };
+    }
+
+
+    public UICallback<PutObjectRequest, PutObjectResult> getPutCallback() {
+        return new UICallback<PutObjectRequest, PutObjectResult>(UIDispatcher) {
+            @Override
+            public void onSuccess(PutObjectRequest request, PutObjectResult result) {
+                final String object = request.getObjectKey();
+                final String ETag = result.getETag();
+                final String requestid = result.getRequestId();
+                final String callback = result.getServerCallbackReturnBody();
+                addCallback(new Runnable() {
+                    @Override
+                    public void run() {
+                    	ToastUtil.show(context,"上传成功");
+                    	
+                    	
+//                    	执行删除操作
+                    	File file=new File(picPath);
+                        file.delete();
+                    }
+                }, null);
+                super.onSuccess(request, result);
+            }
+
+            @Override
+            public void onFailure(PutObjectRequest request, ClientException clientExcepion, ServiceException serviceException) {
+                String info = "";
+                // 请求异常
+                if (clientExcepion != null) {
+                    // 本地异常如网络异常等
+                    clientExcepion.printStackTrace();
+                    info = clientExcepion.toString();
+                    Looper.prepare();
+					Toast.makeText(context, "网络异常",Toast.LENGTH_SHORT).show();
+					Looper.loop();
+                }
+                if (serviceException != null) {
+                    // 服务异常
+                    info = serviceException.toString();
+                    Looper.prepare();
+					Toast.makeText(context, "服务器异常",Toast.LENGTH_SHORT).show();
+					Looper.loop();
+                }
+                final String outputinfo = new String(info);
+                addCallback(null,new Runnable() {
+                    @Override
+                    public void run() {
+//                    	ToastUtil.show(context,"网络异常,上传失败");
+                    	
+                    	mFileList=new ArrayList<File>();
+                    	File f=new File("/mnt/extsd1/CarDVR/pic");
+                    	List<File>fileList=getFile(f);
+                    	for(int i=0;i<fileList.size();i++){
+                    		File file=fileList.get(i);
+                    	}
+)
+                    }
+
+					private List<File> getFile(File fiel) {
+						// TODO Auto-generated method stub
+						File[] fileArray = file.listFiles();
+						for (File f : fileArray) {
+						if (f.isFile()) {
+						mFileList.add(f);
+						} else {
+						getFile(f);
+						}
+						}
+						return mFileList;
+						System.out.println(getFile.toString);
+						}
+					}
+                });
+               super.onFailure(request, clientExcepion, serviceException); 
+            }
+        };
+    }
+
+    public UICallback<PauseableUploadRequest, PauseableUploadResult> getMultiPartCallback() {
+        return new UICallback<PauseableUploadRequest, PauseableUploadResult> (UIDispatcher) {
+            //上传成功
+            @Override
+            public void onSuccess(PauseableUploadRequest request, PauseableUploadResult result) {
+                Log.d("PutObject", "UploadSuccess");
+
+                Log.d("ETag", result.getETag());
+                Log.d("RequestId", result.getRequestId());
+                final String object = request.getObjectKey();
+                final String ETag = result.getETag();
+                final String requestid = result.getRequestId();
+
+                addCallback(new Runnable() {
+                    @Override
+                    public void run() {
+                    	ToastUtil.show(context,"断点上传成功");
+                    }
+                }, null);
+                super.onSuccess(request, result);
+            }
+
+            //上传失败
+            @Override
+            public void onFailure(PauseableUploadRequest request, ClientException clientExcepion, ServiceException serviceException) {
+                String info = "";
+                // 请求异常
+                if (clientExcepion != null) {
+                    // 本地异常如网络异常等
+                    clientExcepion.printStackTrace();
+                    info = clientExcepion.toString();
+                }
+                if (serviceException != null) {
+                    // 服务异常
+                    Log.e("ErrorCode", serviceException.getErrorCode());
+                    Log.e("RequestId", serviceException.getRequestId());
+                    Log.e("HostId", serviceException.getHostId());
+                    Log.e("RawMessage", serviceException.getRawMessage());
+                    info = serviceException.toString();
+                }
+                final String outputinfo = new String(info);
+                addCallback(null, new Runnable() {
+                    @Override
+                    public void run() {
+                    	ToastUtil.show(context,"上传失败");
+                    }
+                });
+                super.onFailure(request, clientExcepion, serviceException);
+            }
+        };
+    }
+
+}

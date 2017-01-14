@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring comment="Convert local variable &apos;cn.eoe.mifareultralight.MifareultralightMainActivity.onNewIntent().tag&apos; in &apos;cn.eoe.mifareultralight.MifareultralightMainActivity.onNewIntent()&apos; to field&#x0D;&#x0A;- Original project: &apos;MifareUltralight&apos;&#x0D;&#x0A;- Original element: &apos;cn.eoe.mifareultralight.MifareultralightMainActivity.onNewIntent().tag&apos;&#x0D;&#x0A;- Field name: &apos;tag&apos;&#x0D;&#x0A;- Initialize field in method&#x0D;&#x0A;- Declared visibility: &apos;private&apos;" description="Convert local variable &apos;tag&apos; to field" final="false" flags="2" id="org.eclipse.jdt.ui.promote.temp" initialize="1" input="/src&lt;cn.eoe.mifareultralight{MifareultralightMainActivity.java" name="tag" selection="2120 53" stamp="1472529631844" static="false" version="1.0" visibility="2"/>
+</session>

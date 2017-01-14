@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="src" path="src"/>
+	<classpathentry kind="src" path="gen"/>
+	<classpathentry kind="con" path="org.eclipse.andmore.ANDROID_FRAMEWORK"/>
+	<classpathentry exported="true" kind="con" path="org.eclipse.andmore.LIBRARIES"/>
+	<classpathentry exported="true" kind="con" path="org.eclipse.andmore.DEPENDENCIES"/>
+	<classpathentry kind="lib" path="F:/download/xUtils-master/xUtils-master/xUtils-2.6.14.jar"/>
+	<classpathentry kind="lib" path="F:/download/okhttp-3.4.1.jar"/>
+	<classpathentry kind="src" path="/Tick"/>
+	<classpathentry kind="output" path="bin/classes"/>
+</classpath>
